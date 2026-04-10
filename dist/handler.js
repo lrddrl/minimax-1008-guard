@@ -38,7 +38,7 @@ function getContextPct(sessionEntry) {
 export default async function handler(event) {
     const { sessionEntry, patch, cfg } = event.context ?? {};
     const errorMessage = patch?.lastError ?? sessionEntry?.lastError ?? "";
-    const provider = sessionEntry?.provider ?? "";
+    const provider = sessionEntry?.modelProvider ?? "";
     if (!isMiniMax1008Error(errorMessage, provider))
         return;
     const hookCfg = resolveHookConfig(cfg, "minimax-1008-guard");

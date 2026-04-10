@@ -40,7 +40,7 @@ export default async function handler(event: any) {
   const { sessionEntry, patch, cfg } = event.context ?? {};
 
   const errorMessage = patch?.lastError ?? sessionEntry?.lastError ?? "";
-  const provider = sessionEntry?.provider ?? "";
+  const provider = sessionEntry?.modelProvider ?? "";
 
   if (!isMiniMax1008Error(errorMessage, provider)) return;
 
