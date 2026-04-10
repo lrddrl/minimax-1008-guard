@@ -1,6 +1,6 @@
 {
   "name": "@lrddrl/minimax-1008-guard",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Intercepts MiniMax 1008 billing errors (context overflow), auto-compacts session, prevents gateway hangs",
   "type": "module",
   "openclaw": {
@@ -10,14 +10,18 @@
       }
     }
   },
-  "files": ["dist", "HOOK.md"],
+  "files": [
+    "dist",
+    "HOOK.md"
+  ],
   "scripts": {
     "build": "tsc",
     "prepublishOnly": "npm run build"
   },
   "devDependencies": {
-    "typescript": "^5.4.0",
-    "@types/node": "^22.0.0"
+    "@types/node": "^22.0.0",
+    "openclaw": "^2026.4.9",
+    "typescript": "^5.4.0"
   },
   "keywords": [
     "openclaw",
