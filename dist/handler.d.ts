@@ -15,19 +15,4 @@
  *  5. Issues /compact (or /new) so the session recovers automatically
  *  6. Never throws — keeps the gateway loop alive
  */
-type HookHandler = (event: HookEvent) => Promise<void>;
-interface HookEvent {
-    type: string;
-    action: string;
-    sessionKey: string;
-    timestamp: number;
-    messages: string[];
-    context?: HookContext;
-}
-interface HookContext {
-    sessionEntry?: Record<string, unknown>;
-    patch?: Record<string, unknown>;
-    cfg?: Record<string, unknown>;
-}
-declare const handler: HookHandler;
-export default handler;
+export default function handler(event: any): Promise<void>;

@@ -15,89 +15,49 @@
  *  5. Issues /compact (or /new) so the session recovers automatically
  *  6. Never throws — keeps the gateway loop alive
  */
-// ── helpers ──────────────────────────────────────────────────────────────────
-function is1008Error(msg) {
-    if (!msg)
-        return false;
-    return (msg.includes("1008") ||
-        msg.toLowerCase().includes("insufficient balance") ||
-        // openclaw wraps the raw error in its own billing message in some paths
-        msg.toLowerCase().includes("billing error"));
+function resolveHookConfig(cfg, hookName) {
+    if (!cfg)
+        return undefined;
+    // openclaw v2026+ uses hooks.internal.entries[hookName]
+    const entries = cfg?.hooks?.internal?.entries;
+    return entries?.[hookName];
 }
-function contextPct(sessionEntry) {
+function isMiniMax1008Error(msg, provider) {
+    if (!msg || !provider.toLowerCase().includes("minimax"))
+        return false;
+    const lowerMsg = msg.toLowerCase();
+    return lowerMsg.includes("1008") || lowerMsg.includes("insufficient balance");
+}
+function getContextPct(sessionEntry) {
     if (!sessionEntry)
         return 0;
-    const limit = sessionEntry.contextTokens ??
-        sessionEntry.contextWindow ??
-        0;
-    const used = sessionEntry.currentContextTokens ??
-        (sessionEntry.lastCallUsage?.input ?? 0);
-    if (limit <= 0 || used <= 0)
-        return 0;
-    return Math.round((used / limit) * 100);
+    const limit = sessionEntry.contextTokens ?? 0;
+    const used = sessionEntry.totalTokens ?? 0;
+    return limit > 0 ? Math.round((used / limit) * 100) : 0;
 }
-// ── main handler ─────────────────────────────────────────────────────────────
-const handler = async (event) => {
-    try {
-        if (event.type !== "session" || event.action !== "patch")
-            return;
-        const patch = event.context?.patch;
-        const sessionEntry = event.context?.sessionEntry;
-        const message = patch?.message;
-        const stopReason = message?.stopReason;
-        const errorMessage = message?.errorMessage;
-        const provider = message?.provider ?? "";
-        const model = message?.model ?? "";
-        if (stopReason !== "error")
-            return;
-        if (!is1008Error(errorMessage))
-            return;
-        // Read optional config
-        const cfg = event.context?.cfg;
-        const hookCfg = cfg?.hooks?.internal?.entries;
-        const myConf = hookCfg?.["minimax-1008-guard"] ?? {};
-        const thresholdPct = myConf.contextThresholdPct ?? 85;
-        const autoAction = myConf.autoAction ?? "compact";
-        // Compute context utilisation
-        const pct = contextPct(sessionEntry);
-        const isContextOverflow = pct >= thresholdPct;
-        const providerLabel = provider
-            ? `${provider}/${model}`.replace(/\/$/, "")
-            : model || "MiniMax";
-        // Back-end log
-        console.warn(`[minimax-1008-guard] ⚠️  Caught 1008 error from ${providerLabel}` +
-            ` | context ${pct > 0 ? pct + "%" : "unknown"}` +
-            ` | isContextOverflow=${isContextOverflow}` +
-            ` | sessionKey=${event.sessionKey}` +
-            ` | rawError="${errorMessage}"`);
-        // Front-end notification
-        const contextNote = pct > 0
-            ? `当前上下文使用率约 **${pct}%**。`
-            : "无法读取当前上下文使用率。";
-        const actionNote = isContextOverflow
-            ? autoAction === "compact"
-                ? "上下文已超阈值，正在自动执行 `/compact` 压缩历史记录…"
-                : "上下文已超阈值，正在自动开启新会话 `/new`…"
-            : "上下文使用率未超阈值，可能是账户余额不足，请检查 MiniMax 控制台。若余额充足，请手动执行 `/compact`。";
-        event.messages.push(`⚠️ **MiniMax 返回了 1008 错误**（insufficient balance）\n\n` +
-            `这通常不是真的欠费，而是本次请求的 token 数量超过了模型上下文窗口限制。\n\n` +
-            `${contextNote}\n\n` +
-            `${actionNote}\n\n` +
-            `_Provider: \`${providerLabel}\` | Raw: \`${errorMessage ?? "1008"}\`_`);
-        // Auto-recover
-        if (isContextOverflow) {
-            await new Promise((r) => setTimeout(r, 800));
-            if (autoAction === "compact") {
-                event.messages.push("/compact");
-            }
-            else {
-                event.messages.push("/new");
-            }
-            console.log(`[minimax-1008-guard] ✅ Triggered auto-${autoAction} for session ${event.sessionKey}`);
-        }
+export default async function handler(event) {
+    const { sessionEntry, patch, cfg } = event.context ?? {};
+    const errorMessage = patch?.lastError ?? sessionEntry?.lastError ?? "";
+    const provider = sessionEntry?.provider ?? "";
+    if (!isMiniMax1008Error(errorMessage, provider))
+        return;
+    const hookCfg = resolveHookConfig(cfg, "minimax-1008-guard");
+    const thresholdPct = hookCfg?.contextThresholdPct ?? 85;
+    const autoAction = hookCfg?.autoAction ?? "compact";
+    const pct = getContextPct(sessionEntry);
+    const isContextOverflow = pct >= thresholdPct;
+    const contextNote = pct > 0
+        ? `Current context utilization: **${pct}%**.`
+        : "Context utilization data unavailable.";
+    const actionNote = isContextOverflow
+        ? `Threshold exceeded. Auto-recovering via \`/${autoAction}\`...`
+        : "Threshold not reached. This may be a true balance issue; please check MiniMax console.";
+    event.messages.push(`⚠️ **MiniMax 1008 Error**\n\n` +
+        `Likely context window limit reached.\n\n` +
+        `${contextNote}\n\n` +
+        `${actionNote}\n\n` +
+        `_Raw Error: \`${errorMessage}\`_`);
+    if (isContextOverflow) {
+        event.messages.push(`/${autoAction}`);
     }
-    catch (err) {
-        console.error("[minimax-1008-guard] Hook error (non-fatal):", err);
-    }
-};
-export default handler;
+}
