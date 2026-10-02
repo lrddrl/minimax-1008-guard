@@ -1,5 +1,7 @@
 # minimax-1008-guard
 
+[![CI](https://github.com/lrddrl/minimax-1008-guard/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/lrddrl/minimax-1008-guard/actions/workflows/ci.yml)
+
 **Author: [lrddrl](https://github.com/lrddrl)**
 
 OpenClaw hook that intercepts MiniMax `insufficient balance (1008)` errors — the ones that usually mean "context window exceeded", not "you're out of money". Auto-compacts the session and prevents gateway hangs.
